@@ -36,6 +36,30 @@ contract("Names", async (accounts) => {
       // init contract
     });
 
+    it("can not regiter a name that is to short", async function () {
+      let tooShortName = "io";
+      let secret1 = await secretHelper(tooShortName, USER_1, 1000, 10);
+      await names
+        .register(secret1, tooShortName, 10, {
+          value: 1000,
+          from: USER_1,
+          gasPrice: 0,
+        })
+        .should.be.rejectedWith(Error, "Incorrect name length");
+    });
+
+    it("can not regiter a name that is to long", async function () {
+      let tooLongName = "---------------------------------------------------------------------------------";
+      let secret = await secretHelper(tooLongName, USER_1, 10000000, 10);
+      await names
+        .register(secret, tooLongName, 10, {
+          value: 10000000,
+          from: USER_1,
+          gasPrice: 0,
+        })
+        .should.be.rejectedWith(Error, "Incorrect name length");
+    });
+
     it("block certain balance when registering a name", async function () {
       let userBalanceStart = BigNumber(await web3.eth.getBalance(USER_1));
 
@@ -319,7 +343,7 @@ contract("Names", async (accounts) => {
           from: USER_1,
           gasPrice: 0,
         })
-        .should.be.rejectedWith(Error, "secret is invalid");
+        .should.be.rejectedWith(Error, "Secret is invalid");
     });
   });
 });

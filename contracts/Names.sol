@@ -7,6 +7,7 @@ contract Names {
     using SafeMath for uint256;
 
     uint256 public constant MIN_NAME_LENGTH = 3;
+    uint256 public constant MAX_NAME_LENGTH = 80;
 
     uint256 public pricePerChar;
     mapping(bytes32 => bytes32) private secrets;
@@ -201,14 +202,18 @@ contract Names {
     ) public payable {
         uint256 _price = getRegistryPrice(_name, _blockCount);
 
+        require(
+            bytes(_name).length <= MAX_NAME_LENGTH && bytes(_name).length >= MIN_NAME_LENGTH,
+            "Incorrect name length"
+        );
+
         require(msg.value >= _price, "Payment is insufficient");
         bytes32 _nameKey = _getNameKey(_name);
         require(expirity[_nameKey] < block.number, "Can not register twice");
-
-        require(secrets[keccak256(abi.encodePacked(_secret))] == _secret, "secret not found");
+        require(secrets[keccak256(abi.encodePacked(_secret))] == _secret, "Secret not found");
         require(
             validateSecret(_secret, _name, msg.sender, msg.value, _blockCount),
-            "secret is invalid"
+            "Secret is invalid"
         );
 
         if (lockedBalance[_nameKey] > 0) {
