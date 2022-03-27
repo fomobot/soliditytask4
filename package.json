@@ -1,0 +1,46 @@
+{
+  "name": "advanceblockchain",
+  "version": "1.0.0",
+  "description": "Build a vanity name registering system resistant against frontrunning. The purpose of the name is outside the scope of the assignment and you can make reasonable assumptions on the size, encoding, etc of the name to complete in time. An unregistered name can be registered for a certain amount of time by locking a certain balance of an account. After the registration expires, the account loses ownership of the name and his balance is unlocked. The registration can be renewed by making an on-chain call to keep the name registered and balance locked. You can assume reasonable defaults for the locking amount and period. The fee to register the name depends directly on the size of the name. Also, a malicious node/validator should not be able to front-run the process by censoring transactions of an honest user and registering its name in its own account.",
+  "main": "index.js",
+  "scripts": {
+    "coverage": "npx truffle run coverage",
+    "migrate": "npx truffle migrate",
+    "ganache": "npx ganache-cli",
+    "test": "npx truffle test",
+    "lint-fix": "npx prettier --write \"contracts/**/*.sol\" && npx prettier --write \"./**/*.js\" && npx prettier --write \"./[a-zA-Z0-9.]+(?!-lock).json\"",
+    "lint-check": "npx prettier --check \"contracts/**/*.sol\" && npx prettier --check \"./**/*.js\" && npx prettier --check \"./[a-zA-Z0-9.]+(?!-lock).json\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fomobot/soliditytask4.git"
+  },
+  "author": "Carlos Colorado",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fomobot/soliditytask4/issues"
+  },
+  "homepage": "https://github.com/fomobot/soliditytask4#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.5.0",
+    "@openzeppelin/test-helpers": "^0.5.15",
+    "@truffle/hdwallet-provider": "^2.0.4",
+    "bignumber.js": "^9.0.2",
+    "chai": "^4.3.6",
+    "chai-as-promised": "^7.1.1",
+    "chai-bignumber": "^3.0.0",
+    "chai-bn": "^0.3.1",
+    "ganache-cli": "^6.12.2",
+    "husky": "^7.0.4",
+    "prettier-plugin-solidity": "^1.0.0-beta.19",
+    "solhint": "^3.3.7",
+    "solhint-plugin-prettier": "0.0.5",
+    "solidity-coverage": "^0.7.20",
+    "truffle": "^5.5.5",
+    "truffle-contract-size": "^2.0.1",
+    "truffle-test-utils": "^0.1.0"
+  },
+  "devDependencies": {
+    "prettier": "2.6.1"
+  }
+}
