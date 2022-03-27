@@ -27,6 +27,9 @@ honest user and registering its name in its own account.
 
 # Instructions
 
+## Usage
+
+### Commands
 ```sh
 # Install dependencies
 npm install
@@ -49,4 +52,29 @@ npm run test
 npm run coverage
 ```
 
+### Contract Interaction
 
+1. Registering a secret
+To register a name safely from a frot running attack one must register a secret as a
+commit message including.
+This secret must be built with the following data in this exact same order using the
+`registerSecret` function:
+* `string` Name to regiter
+* `address` of the wallet who intends to register the name
+* `uint256` Value in ether intended as payment for the registration
+* `uint256` blockCount value of the amount of blocks the name is intended for registration
+
+2. Registering a name
+Once this commit secret is properly registered, a name can be registered via the
+`register` function.
+
+3. Renewal is available for the name owner once the name has been registered via the
+   `renew` function.
+
+5. Locked funds on the registration can be used as part of the payment when renewing a
+   registration.
+
+6. If the name expires its block count allocation a new user can register the name
+
+
+Further documentation can be found at the contract's `natspace`.
