@@ -3,10 +3,7 @@ const Names = artifacts.require("Names");
 const BigNumber = require("bignumber.js");
 const { time } = require("@openzeppelin/test-helpers");
 
-require("chai")
-  .use(require("chai-as-promised"))
-  .use(require("chai-bignumber")(BigNumber))
-  .should();
+require("chai").use(require("chai-as-promised")).use(require("chai-bignumber")(BigNumber)).should();
 
 const pricePerChar = 10;
 const blocksInADay = 6400;
@@ -15,6 +12,16 @@ const zeroAddress = "0x0000000000000000000000000000000000000000";
 
 let names;
 let tenLetterWord = "Friendship";
+let altTenLetterWord = "Strawberry";
+
+async function secretHelper(name, user, value, blockAmount) {
+  let secret = await names.secretEcondingHelper(name, user, value, blockAmount);
+  let isValid = await names.validateSecret(secret, name, user, value, blockAmount);
+  isValid.should.be.equal(true);
+  await names.registerSecret(secret, { from: user, gasPrice: 0 });
+
+  return secret;
+}
 
 contract("Names", async (accounts) => {
   const USER_1 = accounts[1];
@@ -31,7 +38,9 @@ contract("Names", async (accounts) => {
 
     it("block certain balance when registering a name", async function () {
       let userBalanceStart = BigNumber(await web3.eth.getBalance(USER_1));
-      await names.register(tenLetterWord, 10, {
+
+      let secret = await secretHelper(tenLetterWord, USER_1, 1000, 10);
+      await names.register(secret, tenLetterWord, 10, {
         value: 1000,
         from: USER_1,
         gasPrice: 0,
@@ -49,7 +58,8 @@ contract("Names", async (accounts) => {
       let paymentExcess = 10000;
       let userBalanceStart = BigNumber(await web3.eth.getBalance(USER_1));
 
-      await names.register(tenLetterWord, 10, {
+      let secret = await secretHelper(tenLetterWord, USER_1, 1000 + paymentExcess, 10);
+      await names.register(secret, tenLetterWord, 10, {
         value: 1000 + paymentExcess,
         from: USER_1,
         gasPrice: 0,
@@ -63,7 +73,8 @@ contract("Names", async (accounts) => {
     });
 
     it("should register a name for a certain amount of time", async function () {
-      await names.register(tenLetterWord, 10, { value: 1000 });
+      let secret = await secretHelper(tenLetterWord, accounts[0], 1000, 10);
+      await names.register(secret, tenLetterWord, 10, { value: 1000 });
       let expiration = BigNumber(await names.getExpiration(tenLetterWord));
 
       let currentBlock = await web3.eth.getBlock("latest");
@@ -73,9 +84,11 @@ contract("Names", async (accounts) => {
     });
 
     it("not let register the name again", async function () {
-      await names.register(tenLetterWord, 10, { value: 1000 });
+      let secret1 = await secretHelper(tenLetterWord, accounts[0], 1000, 10);
+      await names.register(secret1, tenLetterWord, 10, { value: 1000 });
+      let secret2 = await secretHelper(tenLetterWord, accounts[0], 1000, 10);
       await names
-        .register(tenLetterWord, 10, { value: 1000 })
+        .register(secret2, tenLetterWord, 10, { value: 1000 })
         .should.be.rejectedWith(Error, "Can not register twice");
     });
 
@@ -85,8 +98,9 @@ contract("Names", async (accounts) => {
     });
 
     it("not register a name if payment is insufficient", async function () {
+      let secret = await secretHelper(tenLetterWord, accounts[0], 1000, 10);
       await names
-        .register(tenLetterWord, 10, { value: 100 })
+        .register(secret, tenLetterWord, 10, { value: 100 })
         .should.be.rejectedWith(Error, "Payment is insufficient");
 
       let isRegistered = await names.isRegistered(tenLetterWord);
@@ -94,7 +108,8 @@ contract("Names", async (accounts) => {
     });
 
     it("register a name if payment is insufficient", async function () {
-      await names.register(tenLetterWord, 10, { value: 1000, from: USER_1 });
+      let secret = await secretHelper(tenLetterWord, USER_1, 1000, 10);
+      await names.register(secret, tenLetterWord, 10, { value: 1000, from: USER_1 });
       isRegistered = await names.isRegistered(tenLetterWord);
       nameOwner = await names.resolve(tenLetterWord);
 
@@ -105,20 +120,17 @@ contract("Names", async (accounts) => {
     it("charge configured amout per character", async function () {
       let charge = BigNumber(await names.getRegistryPrice(tenLetterWord, 10));
       charge.should.be.bignumber.equal(1000);
-      let chargePerDay = BigNumber(
-        await names.getRegistryPrice(tenLetterWord, blocksInADay)
-      );
+      let chargePerDay = BigNumber(await names.getRegistryPrice(tenLetterWord, blocksInADay));
       chargePerDay.should.be.bignumber.equal(640000);
-      let chargePerYear = BigNumber(
-        await names.getRegistryPrice(tenLetterWord, blocksInAYear)
-      );
+      let chargePerYear = BigNumber(await names.getRegistryPrice(tenLetterWord, blocksInAYear));
       chargePerYear.should.be.bignumber.equal(233600000);
     });
   });
 
   describe("Registered Names", async function () {
     beforeEach(async function () {
-      await names.register(tenLetterWord, 10, { value: 1000, from: USER_1 });
+      let secret = await secretHelper(tenLetterWord, USER_1, 1000, 10);
+      await names.register(secret, tenLetterWord, 10, { value: 1000, from: USER_1 });
     });
 
     it("be renewable by name owner before expiration", async function () {
@@ -131,9 +143,7 @@ contract("Names", async (accounts) => {
 
     it("should reuse locked balance when renewing", async function () {
       let userBalanceStart = BigNumber(await web3.eth.getBalance(USER_1));
-      let contractBalanceStart = BigNumber(
-        await web3.eth.getBalance(names.address)
-      );
+      let contractBalanceStart = BigNumber(await web3.eth.getBalance(names.address));
 
       await names.renew(tenLetterWord, 10, {
         value: 0,
@@ -141,9 +151,7 @@ contract("Names", async (accounts) => {
         gasPrice: 0,
       });
 
-      let contractBalanceEnd = BigNumber(
-        await web3.eth.getBalance(names.address)
-      );
+      let contractBalanceEnd = BigNumber(await web3.eth.getBalance(names.address));
       let userBalanceEnd = BigNumber(await web3.eth.getBalance(USER_1));
 
       userBalanceEnd.should.be.bignumber.equal(userBalanceStart);
@@ -153,9 +161,7 @@ contract("Names", async (accounts) => {
 
     it("renew return locked balance", async function () {
       let userBalanceStart = BigNumber(await web3.eth.getBalance(USER_1));
-      let contractBalanceStart = BigNumber(
-        await web3.eth.getBalance(names.address)
-      );
+      let contractBalanceStart = BigNumber(await web3.eth.getBalance(names.address));
 
       await names.renew(tenLetterWord, 11, {
         value: 200,
@@ -163,9 +169,7 @@ contract("Names", async (accounts) => {
         gasPrice: 0,
       });
 
-      let contractBalanceEnd = BigNumber(
-        await web3.eth.getBalance(names.address)
-      );
+      let contractBalanceEnd = BigNumber(await web3.eth.getBalance(names.address));
       let userBalanceEnd = BigNumber(await web3.eth.getBalance(USER_1));
 
       userBalanceEnd.should.be.bignumber.equal(userBalanceStart.minus(100));
@@ -193,7 +197,8 @@ contract("Names", async (accounts) => {
 
   describe("Expired Names", async function () {
     beforeEach(async function () {
-      await names.register(tenLetterWord, 10, { value: 1000, from: USER_1 });
+      let secret = await secretHelper(tenLetterWord, USER_1, 1000, 10);
+      await names.register(secret, tenLetterWord, 10, { value: 1000, from: USER_1 });
       let currentBlock = await web3.eth.getBlockNumber();
       await time.advanceBlockTo(currentBlock + 10);
     });
@@ -210,18 +215,14 @@ contract("Names", async (accounts) => {
     it("withdraw locked balance after expired", async function () {
       let userBalanceStart = BigNumber(await web3.eth.getBalance(USER_1));
 
-      let lockedBalance = BigNumber(
-        await names.getLockedBalance(tenLetterWord)
-      );
+      let lockedBalance = BigNumber(await names.getLockedBalance(tenLetterWord));
 
       await names.withdraw(tenLetterWord, { from: USER_1, gasPrice: 0 });
       await time.advanceBlock();
 
       let userBalanceEnd = BigNumber(await web3.eth.getBalance(USER_1));
 
-      userBalanceEnd.should.be.bignumber.equal(
-        userBalanceStart.plus(lockedBalance)
-      );
+      userBalanceEnd.should.be.bignumber.equal(userBalanceStart.plus(lockedBalance));
     });
 
     it("unlock balance only by name owner", async function () {
@@ -236,9 +237,7 @@ contract("Names", async (accounts) => {
       let expiration = BigNumber(await names.getExpiration(tenLetterWord));
       let isRegistered = await names.isRegistered(tenLetterWord);
       let owner = await names.resolve(tenLetterWord);
-      let lockedBalance = BigNumber(
-        await names.getLockedBalance(tenLetterWord)
-      );
+      let lockedBalance = BigNumber(await names.getLockedBalance(tenLetterWord));
 
       expiration.should.be.bignumber.equal(0);
       isRegistered.should.be.equal(false);
@@ -247,7 +246,8 @@ contract("Names", async (accounts) => {
     });
 
     it("be able to be registered by anyone", async function () {
-      names.register(tenLetterWord, 10, { value: 1000, from: USER_2 });
+      let secret = await secretHelper(tenLetterWord, USER_2, 1000, 10);
+      names.register(secret, tenLetterWord, 10, { value: 1000, from: USER_2 });
     });
 
     it("resolve to 0x0 when expired", async function () {
@@ -262,7 +262,8 @@ contract("Names", async (accounts) => {
     });
 
     it("registrable by other users", async function () {
-      await names.register(tenLetterWord, 10, { value: 1000, from: USER_2 });
+      let secret = await secretHelper(tenLetterWord, USER_2, 1000, 10);
+      await names.register(secret, tenLetterWord, 10, { value: 1000, from: USER_2 });
     });
 
     it("eject original user locked balance when registering with a new user", async function () {
@@ -271,7 +272,8 @@ contract("Names", async (accounts) => {
 
       let lockedAmount = BigNumber(await names.getLockedBalance(tenLetterWord));
 
-      await names.register(tenLetterWord, 10, {
+      let secret = await secretHelper(tenLetterWord, USER_2, 1000, 10);
+      await names.register(secret, tenLetterWord, 10, {
         value: 1000,
         from: USER_2,
         gasPrice: 0,
@@ -280,39 +282,44 @@ contract("Names", async (accounts) => {
       let user1BalanceEnd = BigNumber(await web3.eth.getBalance(USER_1));
       let user2BalanceEnd = BigNumber(await web3.eth.getBalance(USER_2));
 
-      user1BalanceEnd.should.be.bignumber.equal(
-        user1BalanceStart.plus(lockedAmount)
-      );
+      user1BalanceEnd.should.be.bignumber.equal(user1BalanceStart.plus(lockedAmount));
       user2BalanceEnd.should.be.bignumber.equal(user2BalanceStart.minus(1000));
     });
   });
 
   describe("front-running protection", async function () {
-    it("safly commit desired domain", async function () {
-      let secret = await names.secretEcondingHelper(
-        tenLetterWord,
-        USER_1,
-        1000,
-        10
-      );
+    it("safely commit desired name", async function () {
+      let secret = await names.secretEcondingHelper(tenLetterWord, USER_1, 1000, 10);
 
       await names.registerSecret(secret);
 
-      let isValid = await names.validateSecret(
-        secret,
-        tenLetterWord,
-        USER_1,
-        1000,
-        10
-      );
+      let isValid = await names.validateSecret(secret, tenLetterWord, USER_1, 1000, 10);
 
       isValid.should.be.equal(true);
 
-      await names.safeRegister(secret, tenLetterWord, 10, {
+      await names.register(secret, tenLetterWord, 10, {
         value: 1000,
         from: USER_1,
         gasPrice: 0,
       });
+    });
+
+    it("reject the incorrect secret despite being valid", async function () {
+      let secret = await names.secretEcondingHelper(altTenLetterWord, USER_1, 1000, 10);
+
+      await names.registerSecret(secret);
+
+      let isValid = await names.validateSecret(secret, altTenLetterWord, USER_1, 1000, 10);
+
+      isValid.should.be.equal(true);
+
+      await names
+        .register(secret, tenLetterWord, 10, {
+          value: 1000,
+          from: USER_1,
+          gasPrice: 0,
+        })
+        .should.be.rejectedWith(Error, "secret is invalid");
     });
   });
 });

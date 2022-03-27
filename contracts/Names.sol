@@ -16,11 +16,7 @@ contract Names {
     mapping(bytes32 => uint256) private lockedBalance;
 
     event WithdrawnFunds(address indexed user, uint256 amount, bool ejected);
-    event NameReserved(
-        bytes32 indexed _name,
-        address indexed user,
-        uint256 blockAmount
-    );
+    event NameReserved(bytes32 indexed _name, address indexed user, uint256 blockAmount);
 
     /// @notice  does something
     /// @param _pricePerChar uint256 price per name character per block
@@ -46,33 +42,21 @@ contract Names {
     /// @notice returns the expliration date of a given name
     /// @param _name string value of the name
     /// @return _expirationBlock uint256
-    function getExpiration(string memory _name)
-        public
-        view
-        returns (uint256 _expirationBlock)
-    {
+    function getExpiration(string memory _name) public view returns (uint256 _expirationBlock) {
         return expirity[_getNameKey(_name)];
     }
 
     /// @notice returns the locked balance for a given name
     /// @param _name string value of the name
     /// @return _lockedBalance uint256
-    function getLockedBalance(string memory _name)
-        public
-        view
-        returns (uint256 _lockedBalance)
-    {
+    function getLockedBalance(string memory _name) public view returns (uint256 _lockedBalance) {
         return lockedBalance[_getNameKey(_name)];
     }
 
     /// @notice checks if a domain currently registered
     /// @param _name string name to check
     /// @return result
-    function isRegistered(string memory _name)
-        public
-        view
-        returns (bool result)
-    {
+    function isRegistered(string memory _name) public view returns (bool result) {
         bytes32 _nameKey = _getNameKey(_name);
         return expirity[_nameKey] > block.number && registered[_nameKey];
     }
@@ -174,31 +158,34 @@ contract Names {
         secrets[_secretHash] = _saltedSecret;
     }
 
-    // TODO add natspec
+    /// @notice helper function to build a secret
+    /// @dev would probably not be includeda in a contract, consider it
+    /// @dev a time constraint savings
+    /// @return _hash
     function secretEcondingHelper(
         string memory _name,
         address _owner,
         uint256 _value,
         uint256 _blockCount
-    ) public pure returns (bytes32) {
-        bytes32 _nameKey = _getNameKey(_name);
-        bytes32 _hash = keccak256(
-            abi.encodePacked(_name, _owner, _value, _blockCount)
-        );
-        return _hash;
+    ) public pure returns (bytes32 _hash) {
+        _hash = keccak256(abi.encodePacked(_name, _owner, _value, _blockCount));
     }
 
+    /// @notice validates that a secret matches the hashed data
+    /// @param _secret bytes32 hashed value
+    /// @param _name string value of the name
+    /// @param _owner address of the name owner
+    /// @param _value uint256 value for the amount submited for payment
+    /// @param _blockCount uint256 amount of blocks to registry the name for
+    /// @return _isValid bool
     function validateSecret(
         bytes32 _secret,
         string memory _name,
         address _owner,
         uint256 _value,
         uint256 _blockCount
-    ) public pure returns (bool) {
-        bytes32 _nameKey = _getNameKey(_name);
-        bytes32 _hash = keccak256(
-            abi.encodePacked(_name, _owner, _value, _blockCount)
-        );
+    ) public pure returns (bool _isValid) {
+        bytes32 _hash = keccak256(abi.encodePacked(_name, _owner, _value, _blockCount));
         return _hash == _secret;
     }
 
@@ -207,7 +194,7 @@ contract Names {
     /// @dev emits NameReserved
     /// @param _name string name value
     /// @param _blockCount uint256 amount of blocks to register for
-    function safeRegister(
+    function register(
         bytes32 _secret,
         string memory _name,
         uint256 _blockCount
@@ -218,49 +205,14 @@ contract Names {
         bytes32 _nameKey = _getNameKey(_name);
         require(expirity[_nameKey] < block.number, "Can not register twice");
 
-        require(
-            secrets[keccak256(abi.encodePacked(_secret))] == _secret,
-            "secret not found"
-        );
+        require(secrets[keccak256(abi.encodePacked(_secret))] == _secret, "secret not found");
         require(
             validateSecret(_secret, _name, msg.sender, msg.value, _blockCount),
-            "signature is invalid"
+            "secret is invalid"
         );
 
         if (lockedBalance[_nameKey] > 0) {
-            (address _recipient, uint256 _balance) = _ejectLockedAmount(
-                _nameKey
-            );
-            emit WithdrawnFunds(_recipient, _balance, true);
-        }
-
-        registered[_nameKey] = true;
-        nameOwner[_nameKey] = msg.sender;
-        expirity[_nameKey] = (block.number).add(_blockCount);
-        lockedBalance[_nameKey] = _price;
-
-        _settlePayment(_price, 0, msg.value, msg.sender);
-
-        emit NameReserved(_nameKey, msg.sender, _blockCount);
-    }
-
-    /// @notice registers a name to the message sender
-    /// @dev must send required payment in ether
-    /// @dev emits NameReserved
-    /// @param _name string name value
-    /// @param _blockCount uint256 amount of blocks to register for
-    function register(string memory _name, uint256 _blockCount) public payable {
-        uint256 _price = getRegistryPrice(_name, _blockCount);
-
-        require(msg.value >= _price, "Payment is insufficient");
-
-        bytes32 _nameKey = _getNameKey(_name);
-        require(expirity[_nameKey] < block.number, "Can not register twice");
-
-        if (lockedBalance[_nameKey] > 0) {
-            (address _recipient, uint256 _balance) = _ejectLockedAmount(
-                _nameKey
-            );
+            (address _recipient, uint256 _balance) = _ejectLockedAmount(_nameKey);
             emit WithdrawnFunds(_recipient, _balance, true);
         }
 
