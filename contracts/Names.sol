@@ -9,6 +9,7 @@ contract Names {
     uint256 public constant MIN_NAME_LENGTH = 3;
 
     uint256 public pricePerChar;
+    mapping(bytes32 => bytes32) private secrets;
     mapping(bytes32 => bool) private registered;
     mapping(bytes32 => address) private nameOwner;
     mapping(bytes32 => uint256) private expirity;
@@ -78,8 +79,8 @@ contract Names {
 
     /// @notice transfers the locked funds to its owner
     /// @dev internal function
-    /// @param _name string name to check
-    /// @return _wallet address of the user recieving funds
+    /// @param _nameKey bytes32 name to check
+    /// @return _wallet address amount being ejected
     /// @return _balance uint256 amount being ejected
     function _ejectLockedAmount(bytes32 _nameKey)
         internal
@@ -130,7 +131,6 @@ contract Names {
     /// @param _lockedBalance uint256 amount to consider to be already locked
     /// @param _value uint256 value payed on the transaction
     /// @param _payee address receiving the excess payment
-    /// @return
     function _settlePayment(
         uint256 _price,
         uint256 _lockedBalance,
@@ -163,7 +163,85 @@ contract Names {
 
         expirity[_nameKey] = (block.number).add(_blockCount);
 
-        emit NameReserved(bytes(_name), msg.sender, _blockCount);
+        emit NameReserved(_nameKey, msg.sender, _blockCount);
+    }
+
+    /// @notice registers a salted secret to hide the name of the name to register
+    /// @param _saltedSecret string vale of the secret format :
+    ///          keccak256(abi.encode(bytes32 name, address owner, uint256 value)
+    function registerSecret(bytes32 _saltedSecret) external {
+        bytes32 _secretHash = keccak256(abi.encodePacked(_saltedSecret));
+        secrets[_secretHash] = _saltedSecret;
+    }
+
+    // TODO add natspec
+    function secretEcondingHelper(
+        string memory _name,
+        address _owner,
+        uint256 _value,
+        uint256 _blockCount
+    ) public pure returns (bytes32) {
+        bytes32 _nameKey = _getNameKey(_name);
+        bytes32 _hash = keccak256(
+            abi.encodePacked(_name, _owner, _value, _blockCount)
+        );
+        return _hash;
+    }
+
+    function validateSecret(
+        bytes32 _secret,
+        string memory _name,
+        address _owner,
+        uint256 _value,
+        uint256 _blockCount
+    ) public pure returns (bool) {
+        bytes32 _nameKey = _getNameKey(_name);
+        bytes32 _hash = keccak256(
+            abi.encodePacked(_name, _owner, _value, _blockCount)
+        );
+        return _hash == _secret;
+    }
+
+    /// @notice registers a name to the message sender
+    /// @dev must send required payment in ether
+    /// @dev emits NameReserved
+    /// @param _name string name value
+    /// @param _blockCount uint256 amount of blocks to register for
+    function safeRegister(
+        bytes32 _secret,
+        string memory _name,
+        uint256 _blockCount
+    ) public payable {
+        uint256 _price = getRegistryPrice(_name, _blockCount);
+
+        require(msg.value >= _price, "Payment is insufficient");
+        bytes32 _nameKey = _getNameKey(_name);
+        require(expirity[_nameKey] < block.number, "Can not register twice");
+
+        require(
+            secrets[keccak256(abi.encodePacked(_secret))] == _secret,
+            "secret not found"
+        );
+        require(
+            validateSecret(_secret, _name, msg.sender, msg.value, _blockCount),
+            "signature is invalid"
+        );
+
+        if (lockedBalance[_nameKey] > 0) {
+            (address _recipient, uint256 _balance) = _ejectLockedAmount(
+                _nameKey
+            );
+            emit WithdrawnFunds(_recipient, _balance, true);
+        }
+
+        registered[_nameKey] = true;
+        nameOwner[_nameKey] = msg.sender;
+        expirity[_nameKey] = (block.number).add(_blockCount);
+        lockedBalance[_nameKey] = _price;
+
+        _settlePayment(_price, 0, msg.value, msg.sender);
+
+        emit NameReserved(_nameKey, msg.sender, _blockCount);
     }
 
     /// @notice registers a name to the message sender
@@ -193,6 +271,6 @@ contract Names {
 
         _settlePayment(_price, 0, msg.value, msg.sender);
 
-        emit NameReserved(bytes(_name), msg.sender, _blockCount);
+        emit NameReserved(_nameKey, msg.sender, _blockCount);
     }
 }

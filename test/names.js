@@ -286,4 +286,33 @@ contract("Names", async (accounts) => {
       user2BalanceEnd.should.be.bignumber.equal(user2BalanceStart.minus(1000));
     });
   });
+
+  describe("front-running protection", async function () {
+    it("safly commit desired domain", async function () {
+      let secret = await names.secretEcondingHelper(
+        tenLetterWord,
+        USER_1,
+        1000,
+        10
+      );
+
+      await names.registerSecret(secret);
+
+      let isValid = await names.validateSecret(
+        secret,
+        tenLetterWord,
+        USER_1,
+        1000,
+        10
+      );
+
+      isValid.should.be.equal(true);
+
+      await names.safeRegister(secret, tenLetterWord, 10, {
+        value: 1000,
+        from: USER_1,
+        gasPrice: 0,
+      });
+    });
+  });
 });
